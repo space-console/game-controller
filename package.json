@@ -1,0 +1,24 @@
+{
+  "name": "game-controller",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Phone/controller client for Space Console — turns a phone into a game controller that joins a launcher via a room code.",
+  "type": "module",
+  "scripts": {
+    "dev": "live-server --port=5174 --no-browser --entry-file=index.html .",
+    "start": "serve --listen 5174 .",
+    "preview": "serve --listen 5174 .",
+    "lint": "eslint .",
+    "build": "node scripts/stamp.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "eslint": "^9.13.0",
+    "globals": "^15.11.0",
+    "live-server": "^1.2.2",
+    "serve": "^14.2.4"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

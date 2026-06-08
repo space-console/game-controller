@@ -1,27 +1,28 @@
 # game-controller
 
-A project for building and managing game controller functionality.
+Phone/controller client for **Space Console** — turns a phone into a game
+controller that joins a launcher (the TV) via a short room code, AirConsole-style.
+Pairs with the `game-launcher-web` repo (the TV/screen side).
 
-## Overview
+Zero-build, zero-backend static site — plain ES modules, no bundler, no
+framework. Open `index.html` and it runs.
 
-`game-controller` is a starting point for handling game input, controller
-state, and related logic. Flesh out this section as the project takes shape.
-
-## Getting Started
-
-```bash
-git clone git@github_xhevops:space-console/game-controller.git
-cd game-controller
+```sh
+npm install     # dev server only
+npm run dev      # http://localhost:5174 (auto-reload)
 ```
 
-## Project Structure
+This is an early **placeholder**: a join screen + a stubbed control pad whose
+transport (`assets/js/session.js connect()/send()`) is a seam to fill in with a
+real WebSocket / WebRTC / AirConsole client.
 
-```
-game-controller/
-├── README.md
-└── ...
-```
+## Documentation
 
-## License
+All docs live in the **wiki** repo (the org-wide hub), not here:
 
-TBD
+- Service docs: `wiki/docs/services/game-controller/`
+- How we build, deploy, and review across repos: `wiki/docs/way-of-working.md`
+
+Published site: `main` deploys to the Pages root; feature branches get a preview
+at `/preview/<branch-slug>-<hash>/`. Scripts are cache-busted at deploy time
+(`npm run build` → `_dist/`); local `npm run dev` stays build-free.
