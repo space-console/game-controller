@@ -26,7 +26,9 @@ permissions:
 
 concurrency:
   group: pages-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Supersede in-progress feature-branch builds, but NEVER cancel a production
+  # (main) deploy — cancelling it leaves the site root un-deployed.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   build:
