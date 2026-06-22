@@ -4,7 +4,7 @@
 // turns taps into normalized intents and sends them through ControllerSession.
 // Placeholder UX over a stubbed transport — wire a real transport in session.js.
 
-import { ControllerSession } from "./session.js?v=3a39ad30-8b7e-45a6-b0ad-4870810edc11";
+import { ControllerSession } from "./session.js?v=373dd2c6-4601-4194-a04c-e54808ef01d9";
 
 const session = new ControllerSession();
 
@@ -38,8 +38,15 @@ session.addEventListener("ready", (e) => {
 session.addEventListener("closed", () => {
   padView.hidden = true;
   joinView.hidden = false;
-  joinStatus.textContent = "";
   codeInput.value = "";
+});
+
+session.addEventListener("error", (e) => {
+  // Stay on the join screen and explain why the handshake didn't complete.
+  joinStatus.textContent =
+    e.detail.reason === "no-room"
+      ? "No TV found for that code."
+      : "Couldn’t connect — check the code and that the TV is online.";
 });
 
 // ---- Control pad ----------------------------------------------------------
@@ -61,4 +68,7 @@ for (const btn of padView.querySelectorAll("[data-intent]")) {
   btn.addEventListener("pointercancel", () => btn.classList.remove("is-active"));
 }
 
-leaveBtn.addEventListener("click", () => session.disconnect());
+leaveBtn.addEventListener("click", () => {
+  joinStatus.textContent = "";
+  session.disconnect();
+});
