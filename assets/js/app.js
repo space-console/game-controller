@@ -4,7 +4,7 @@
 // turns taps into normalized intents and sends them through ControllerSession.
 // Placeholder UX over a stubbed transport — wire a real transport in session.js.
 
-import { ControllerSession } from "./session.js?v=373dd2c6-4601-4194-a04c-e54808ef01d9";
+import { ControllerSession } from "./session.js?v=0dd7fa1e-1133-4686-9a15-da7e00e180f1";
 
 const session = new ControllerSession();
 
@@ -26,7 +26,14 @@ joinForm.addEventListener("submit", (e) => {
     return;
   }
   joinStatus.textContent = "Connecting…";
-  session.connect(code);
+  try {
+    session.connect(code);
+  } catch (err) {
+    // Surface a synchronous failure (e.g. RTCPeerConnection rejecting the ICE
+    // config) instead of hanging silently on "Connecting…".
+    joinStatus.textContent = "Error: " + (err && err.message ? err.message : String(err));
+    console.error("[controller] connect failed", err);
+  }
 });
 
 session.addEventListener("ready", (e) => {
