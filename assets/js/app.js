@@ -4,7 +4,7 @@
 // turns taps into normalized intents and sends them through ControllerSession.
 // Placeholder UX over a stubbed transport — wire a real transport in session.js.
 
-import { ControllerSession } from "./session.js?v=ee4b33e0-c647-45aa-a708-b0da4ff2eb1d";
+import { ControllerSession } from "./session.js?v=e92249e9-406e-4da9-b022-f6fd965e1d20";
 
 const session = new ControllerSession();
 
@@ -38,9 +38,13 @@ joinForm.addEventListener("submit", (e) => {
 
 session.addEventListener("ready", (e) => {
   padRoom.textContent = `Room ${e.detail.roomCode}`;
+  renderControls(DEFAULT_CONTROLS); // until the TV sends the real layout
   joinView.hidden = true;
   padView.hidden = false;
 });
+
+// The TV tells us which buttons to show (menu pad, or a game's custom layout).
+session.addEventListener("controls", (e) => renderControls(e.detail));
 
 session.addEventListener("closed", () => {
   padView.hidden = true;
@@ -59,13 +63,19 @@ session.addEventListener("error", (e) => {
 // ---- Control pad ----------------------------------------------------------
 // Every control routes through one intent stream, just like the launcher's
 // input layer — the UI never talks to the transport directly.
+const padDpad = document.getElementById("padDpad");
+const padActions = document.getElementById("padActions");
+
+// Layout used until the TV sends the real one (menu / game-specific).
+const DEFAULT_CONTROLS = { profile: "dpad", buttons: [{ id: "enter", label: "OK" }] };
+
 function emit(intent) {
   session.send(intent);
   padLog.textContent = `▸ ${intent}`;
 }
 
-for (const btn of padView.querySelectorAll("[data-intent]")) {
-  // pointerdown for snappy, touch-friendly response.
+// The d-pad is static; wire it once.
+for (const btn of padDpad.querySelectorAll("[data-intent]")) {
   btn.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     btn.classList.add("is-active");
@@ -73,6 +83,41 @@ for (const btn of padView.querySelectorAll("[data-intent]")) {
   });
   btn.addEventListener("pointerup", () => btn.classList.remove("is-active"));
   btn.addEventListener("pointercancel", () => btn.classList.remove("is-active"));
+}
+
+// Action buttons are rebuilt whenever the TV sends a layout. Back is always
+// appended. `hold` buttons emit `<id>` on press and `<id>:release` on release
+// (e.g. pinball flippers).
+function renderControls(ctl) {
+  const profile = ctl && ctl.profile === "buttons" ? "buttons" : "dpad";
+  const buttons = (ctl && ctl.buttons) || [];
+  padDpad.hidden = profile !== "dpad";
+  padActions.innerHTML = "";
+  for (const b of buttons) padActions.appendChild(makeAction(b));
+  padActions.appendChild(makeAction({ id: "back", label: "Back", sys: true }));
+}
+
+function makeAction(b) {
+  const el = document.createElement("button");
+  el.type = "button";
+  el.className = "action" + (b.sys ? " action--sys" : "");
+  el.dataset.intent = b.id;
+  el.textContent = b.label;
+  el.setAttribute("aria-label", b.label);
+  el.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    el.classList.add("is-active");
+    emit(b.id);
+  });
+  const release = () => {
+    if (!el.classList.contains("is-active")) return;
+    el.classList.remove("is-active");
+    if (b.hold) emit(b.id + ":release");
+  };
+  el.addEventListener("pointerup", release);
+  el.addEventListener("pointerleave", release);
+  el.addEventListener("pointercancel", release);
+  return el;
 }
 
 leaveBtn.addEventListener("click", () => {
