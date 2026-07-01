@@ -26,7 +26,14 @@ joinForm.addEventListener("submit", (e) => {
     return;
   }
   joinStatus.textContent = "Connecting…";
-  session.connect(code);
+  try {
+    session.connect(code);
+  } catch (err) {
+    // Surface a synchronous failure (e.g. RTCPeerConnection rejecting the ICE
+    // config) instead of hanging silently on "Connecting…".
+    joinStatus.textContent = "Error: " + (err && err.message ? err.message : String(err));
+    console.error("[controller] connect failed", err);
+  }
 });
 
 session.addEventListener("ready", (e) => {
