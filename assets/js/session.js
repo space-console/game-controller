@@ -127,12 +127,13 @@ export class ControllerSession extends EventTarget {
   }
 }
 
-// Where the signaling service lives. Defaults to the page's host on :8080 so
-// serving the app from a LAN IP makes phones reach it automatically; override
-// per device with ?signal=ws://<host>:<port>.
+// Where the signaling service lives. Defaults to the page's OWN origin
+// (host:port), so app + signaling served from one server just works and phones
+// can reach it (iOS only lets page JS reach the origin host:port). Override with
+// ?signal=ws://<host>:<port> when signaling runs on a different host/port.
 function signalingUrl() {
   const override = new URLSearchParams(location.search).get("signal");
   if (override) return override;
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${location.hostname || "localhost"}:8080`;
+  return `${proto}//${location.host || "localhost:8080"}`;
 }
