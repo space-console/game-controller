@@ -79,3 +79,13 @@ leaveBtn.addEventListener("click", () => {
   joinStatus.textContent = "";
   session.disconnect();
 });
+
+// ---- Auto-join from a scanned QR -------------------------------------------
+// The launcher's QR encodes ?room=<code>; when present, pre-fill and submit so
+// scanning the TV drops the phone straight onto the pad — no typing.
+const scannedRoom = new URLSearchParams(location.search).get("room");
+if (scannedRoom) {
+  codeInput.value = scannedRoom.trim().toUpperCase();
+  if (typeof joinForm.requestSubmit === "function") joinForm.requestSubmit();
+  else joinForm.dispatchEvent(new Event("submit", { cancelable: true }));
+}
