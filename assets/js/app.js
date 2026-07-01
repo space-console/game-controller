@@ -4,7 +4,7 @@
 // turns taps into normalized intents and sends them through ControllerSession.
 // Placeholder UX over a stubbed transport — wire a real transport in session.js.
 
-import { ControllerSession } from "./session.js?v=871cd09e-13c9-4aa0-b3e2-32945e3c5ede";
+import { ControllerSession } from "./session.js?v=ee4b33e0-c647-45aa-a708-b0da4ff2eb1d";
 
 const session = new ControllerSession();
 
@@ -79,3 +79,13 @@ leaveBtn.addEventListener("click", () => {
   joinStatus.textContent = "";
   session.disconnect();
 });
+
+// ---- Auto-join from a scanned QR -------------------------------------------
+// The launcher's QR encodes ?room=<code>; when present, pre-fill and submit so
+// scanning the TV drops the phone straight onto the pad — no typing.
+const scannedRoom = new URLSearchParams(location.search).get("room");
+if (scannedRoom) {
+  codeInput.value = scannedRoom.trim().toUpperCase();
+  if (typeof joinForm.requestSubmit === "function") joinForm.requestSubmit();
+  else joinForm.dispatchEvent(new Event("submit", { cancelable: true }));
+}
