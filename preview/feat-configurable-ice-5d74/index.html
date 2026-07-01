@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Phone-first: device width, locked zoom, no callout. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#05060f" />
+  <title>Space Console Controller</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="stylesheet" href="./assets/css/style.css" />
+</head>
+<body>
+  <div class="app" id="app">
+    <!-- Join screen: enter the room code shown on the TV. -->
+    <section class="join" id="join">
+      <h1 class="join__brand">Space&nbsp;Console</h1>
+      <p class="join__hint">Enter the code shown on the TV</p>
+      <form class="join__form" id="joinForm">
+        <input
+          class="join__code"
+          id="codeInput"
+          inputmode="text"
+          autocomplete="off"
+          autocapitalize="characters"
+          maxlength="4"
+          placeholder="····"
+          aria-label="Room code"
+        />
+        <button class="join__btn" type="submit">Connect</button>
+      </form>
+      <p class="join__status" id="joinStatus" aria-live="polite"></p>
+    </section>
+
+    <!-- Control surface: revealed once "connected" (stubbed transport). -->
+    <section class="pad" id="pad" hidden>
+      <header class="pad__bar">
+        <span class="pad__room" id="padRoom"></span>
+        <button class="pad__leave" id="leaveBtn" type="button">Leave</button>
+      </header>
+
+      <div class="pad__dpad" role="group" aria-label="Direction pad">
+        <button class="dpad dpad--up"    data-intent="up"    aria-label="Up">▲</button>
+        <button class="dpad dpad--left"  data-intent="left"  aria-label="Left">◀</button>
+        <button class="dpad dpad--right" data-intent="right" aria-label="Right">▶</button>
+        <button class="dpad dpad--down"  data-intent="down"  aria-label="Down">▼</button>
+      </div>
+
+      <div class="pad__actions" role="group" aria-label="Action buttons">
+        <button class="action action--b" data-intent="back"  aria-label="Back">B</button>
+        <button class="action action--a" data-intent="enter" aria-label="Action">A</button>
+      </div>
+
+      <p class="pad__log" id="padLog" aria-live="polite"></p>
+    </section>
+  </div>
+
+  <script type="module" src="./assets/js/app.js?v=c30f2ccf-971f-4967-8d30-943331311eb6"></script>
+</body>
+</html>
