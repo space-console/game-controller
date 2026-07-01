@@ -49,6 +49,14 @@ export class ControllerSession extends EventTarget {
       this.connected = true;
       this.dispatchEvent(new CustomEvent("ready", { detail: { roomCode: this.roomCode } }));
     });
+    // The TV sends JSON control layouts (which buttons to show) down this channel.
+    dc.addEventListener("message", (m) => {
+      let msg;
+      try { msg = JSON.parse(m.data); } catch { return; }
+      if (msg && msg.type === "controls") {
+        this.dispatchEvent(new CustomEvent("controls", { detail: msg }));
+      }
+    });
     dc.addEventListener("close", () => this._teardown());
 
     pc.addEventListener("icecandidate", (e) => {
