@@ -4,7 +4,7 @@
 // turns taps into normalized intents and sends them through ControllerSession.
 // Placeholder UX over a stubbed transport — wire a real transport in session.js.
 
-import { ControllerSession } from "./session.js?v=e92249e9-406e-4da9-b022-f6fd965e1d20";
+import { ControllerSession } from "./session.js?v=4d96ba05-35f7-4160-a28a-b69b209f55b1";
 
 const session = new ControllerSession();
 
@@ -12,7 +12,13 @@ const joinView = document.getElementById("join");
 const padView = document.getElementById("pad");
 const joinForm = document.getElementById("joinForm");
 const codeInput = document.getElementById("codeInput");
+const nameInput = document.getElementById("nameInput");
 const joinStatus = document.getElementById("joinStatus");
+
+// Remember the player's name across sessions so they don't retype it. It rides
+// along on join and becomes their label on the TV roster + high-score tables.
+const SAVED_NAME_KEY = "sc.playerName";
+try { nameInput.value = localStorage.getItem(SAVED_NAME_KEY) || ""; } catch { /* private mode */ }
 const padRoom = document.getElementById("padRoom");
 const padLog = document.getElementById("padLog");
 const leaveBtn = document.getElementById("leaveBtn");
@@ -25,9 +31,11 @@ joinForm.addEventListener("submit", (e) => {
     joinStatus.textContent = "Enter the 4-character code from the TV.";
     return;
   }
+  const name = nameInput.value.trim();
+  try { localStorage.setItem(SAVED_NAME_KEY, name); } catch { /* private mode */ }
   joinStatus.textContent = "Connecting…";
   try {
-    session.connect(code);
+    session.connect(code, name);
   } catch (err) {
     // Surface a synchronous failure (e.g. RTCPeerConnection rejecting the ICE
     // config) instead of hanging silently on "Connecting…".

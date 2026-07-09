@@ -37,8 +37,9 @@ export class ControllerSession extends EventTarget {
   }
 
   /** Join a room by code: signal in, then open a peer DataChannel to the TV. */
-  connect(roomCode) {
+  connect(roomCode, name) {
     this.roomCode = (roomCode || "").toUpperCase();
+    this.name = (name || "").trim() || null; // shown on the TV roster / leaderboards
 
     const pc = new RTCPeerConnection(rtcConfig());
     this._pc = pc;
@@ -69,7 +70,7 @@ export class ControllerSession extends EventTarget {
     const ws = new WebSocket(signalingUrl());
     this._ws = ws;
     ws.addEventListener("open", () => {
-      ws.send(JSON.stringify({ type: "join", code: this.roomCode }));
+      ws.send(JSON.stringify({ type: "join", code: this.roomCode, name: this.name }));
     });
     ws.addEventListener("message", async (ev) => {
       const msg = JSON.parse(ev.data);
