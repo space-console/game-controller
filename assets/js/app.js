@@ -4,7 +4,7 @@
 // turns taps into normalized intents and sends them through ControllerSession.
 // Placeholder UX over a stubbed transport — wire a real transport in session.js.
 
-import { ControllerSession } from "./session.js?v=4d96ba05-35f7-4160-a28a-b69b209f55b1";
+import { ControllerSession } from "./session.js?v=eacb9f28-02df-40f6-8d19-2d434c513802";
 
 const session = new ControllerSession();
 
@@ -19,9 +19,21 @@ const joinStatus = document.getElementById("joinStatus");
 // along on join and becomes their label on the TV roster + high-score tables.
 const SAVED_NAME_KEY = "sc.playerName";
 try { nameInput.value = localStorage.getItem(SAVED_NAME_KEY) || ""; } catch { /* private mode */ }
+
+// Remember the room for THIS tab only (sessionStorage), so backgrounding the tab
+// or a bfcache reload can silently rejoin the same room instead of dumping the
+// player back to a blank join form. Cleared only on an explicit Leave.
+const SAVED_ROOM_KEY = "sc.roomCode";
+function saveRoom(code) { try { sessionStorage.setItem(SAVED_ROOM_KEY, code); } catch { /* private mode */ } }
+function savedRoom() { try { return sessionStorage.getItem(SAVED_ROOM_KEY); } catch { return null; } }
+function clearRoom() { try { sessionStorage.removeItem(SAVED_ROOM_KEY); } catch { /* private mode */ } }
 const padRoom = document.getElementById("padRoom");
 const padLog = document.getElementById("padLog");
 const leaveBtn = document.getElementById("leaveBtn");
+const reconnectBanner = document.getElementById("reconnectBanner");
+
+// Toggle the top "Reconnecting…" banner shown while a dropped session rejoins.
+function showReconnecting(on) { reconnectBanner.hidden = !on; }
 
 // ---- Join flow ------------------------------------------------------------
 joinForm.addEventListener("submit", (e) => {
@@ -45,6 +57,8 @@ joinForm.addEventListener("submit", (e) => {
 });
 
 session.addEventListener("ready", (e) => {
+  showReconnecting(false); // back on-air — clear any reconnect banner
+  saveRoom(e.detail.roomCode); // remember it so a background/return can rejoin
   padRoom.textContent = `Room ${e.detail.roomCode}`;
   renderControls(DEFAULT_CONTROLS); // until the TV sends the real layout
   joinView.hidden = true;
@@ -54,13 +68,28 @@ session.addEventListener("ready", (e) => {
 // The TV tells us which buttons to show (menu pad, or a game's custom layout).
 session.addEventListener("controls", (e) => renderControls(e.detail));
 
-session.addEventListener("closed", () => {
-  padView.hidden = true;
-  joinView.hidden = false;
-  codeInput.value = "";
+session.addEventListener("closed", (e) => {
+  // An explicit Leave: forget the room and return to the join form.
+  if (e.detail && e.detail.intentional) {
+    showReconnecting(false);
+    clearRoom();
+    padView.hidden = true;
+    joinView.hidden = false;
+    codeInput.value = "";
+    return;
+  }
+  // An unintentional drop (tab backgrounded, network blip): stay on the pad and
+  // try to rejoin the same room right away. visibilitychange/pageshow below also
+  // retry when the user returns to the tab, in case this immediate attempt was
+  // made while still suspended.
+  padLog.textContent = "Reconnecting…";
+  reconnect();
 });
 
 session.addEventListener("error", (e) => {
+  // A reconnect couldn't complete (e.g. the TV is gone) — stop implying progress.
+  // A later return-to-tab (visibilitychange) will try again.
+  showReconnecting(false);
   // Stay on the join screen and explain why the handshake didn't complete.
   joinStatus.textContent =
     e.detail.reason === "no-room"
@@ -132,6 +161,29 @@ leaveBtn.addEventListener("click", () => {
   joinStatus.textContent = "";
   session.disconnect();
 });
+
+// ---- Reconnect on return ---------------------------------------------------
+// Mobile browsers suspend/tear down a backgrounded tab's WebRTC + WebSocket. On
+// return we silently rejoin the saved room with the saved name — the TV restores
+// the player's seat by name, so it's as if they never left.
+function reconnect() {
+  if (session.connected) return; // already live — nothing to do
+  const code = savedRoom();
+  if (!code) return; // never joined, or explicitly left
+  const name = (nameInput.value || "").trim();
+  showReconnecting(true);
+  joinStatus.textContent = "Reconnecting…";
+  try { session.connect(code, name); } catch (err) {
+    console.error("[controller] reconnect failed", err);
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") reconnect();
+});
+// Fires on bfcache restore (back/forward or resurrected tab) where
+// visibilitychange may not.
+window.addEventListener("pageshow", (e) => { if (e.persisted) reconnect(); });
 
 // ---- Auto-join from a scanned QR -------------------------------------------
 // The launcher's QR encodes ?room=<code>; when present, pre-fill and submit so
