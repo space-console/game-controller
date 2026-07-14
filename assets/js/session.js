@@ -34,10 +34,12 @@ export class ControllerSession extends EventTarget {
     this._pc = null;
     this._dc = null;
     this._pendingIce = [];
+    this._intentional = false; // true only for a user-initiated Leave
   }
 
   /** Join a room by code: signal in, then open a peer DataChannel to the TV. */
   connect(roomCode, name) {
+    this._closeConnections(); // drop any half-dead sockets before reconnecting
     this.roomCode = (roomCode || "").toUpperCase();
     this.name = (name || "").trim() || null; // shown on the TV roster / leaderboards
 
@@ -113,10 +115,13 @@ export class ControllerSession extends EventTarget {
   }
 
   disconnect() {
+    this._intentional = true; // an explicit Leave — forget the room, don't rejoin
     this._teardown();
   }
 
-  _teardown() {
+  // Close the live sockets/peer without announcing it — used both by teardown and
+  // when reconnecting (so a stale connection can't leak or double-fire events).
+  _closeConnections() {
     this.connected = false;
     if (this._dc) {
       try { this._dc.close(); } catch { /* already closing */ }
@@ -131,8 +136,16 @@ export class ControllerSession extends EventTarget {
       this._ws = null;
     }
     this._pendingIce = [];
-    this.roomCode = null;
-    this.dispatchEvent(new CustomEvent("closed"));
+  }
+
+  _teardown() {
+    this._closeConnections();
+    const intentional = this._intentional === true;
+    this._intentional = false;
+    // Keep roomCode/name after an unintentional drop (tab backgrounded, network
+    // blip) so the UI can rejoin the SAME room; only an explicit Leave clears it.
+    if (intentional) this.roomCode = null;
+    this.dispatchEvent(new CustomEvent("closed", { detail: { intentional } }));
   }
 }
 

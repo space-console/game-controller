@@ -10,6 +10,13 @@
   <link rel="stylesheet" href="./assets/css/style.css" />
 </head>
 <body>
+  <!-- Reconnect banner: shown while a dropped session is rejoining (e.g. after
+       the tab was backgrounded). Fixed to the top so it's visible over the pad. -->
+  <div class="reconnect" id="reconnectBanner" role="status" aria-live="assertive" hidden>
+    <span class="reconnect__dot"></span>
+    <span>Reconnecting…</span>
+  </div>
+
   <div class="app" id="app">
     <!-- Join screen: enter the room code shown on the TV. -->
     <section class="join" id="join">

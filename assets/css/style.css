@@ -11,6 +11,38 @@
 
 * { box-sizing: border-box; }
 
+/* Reconnect banner — a top strip that appears while a dropped session rejoins. */
+.reconnect {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: calc(8px + var(--safe-top)) 12px 8px;
+  background: linear-gradient(135deg, #b26a00, #d76d77);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+.reconnect[hidden] { display: none; }
+.reconnect__dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  animation: reconnect-pulse 1s ease-in-out infinite;
+}
+@keyframes reconnect-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50%      { opacity: 1;   transform: scale(1.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reconnect__dot { animation: none; opacity: 1; }
+}
+
 html, body {
   margin: 0;
   height: 100%;
