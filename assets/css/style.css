@@ -162,47 +162,55 @@ html, body {
 
 .pad__log { text-align: center; color: var(--muted); min-height: 1.2em; }
 
-/* ---- Analog driving pad (profile:"analog") ---- */
-.pad__analog { width: 100%; display: flex; flex-direction: column; gap: 1.1rem; }
+/* ---- Analog driving pad (profile:"analog") — compact landscape gamepad ---- */
+/* Buttons hug the bottom-LEFT, the steering joystick hugs the bottom-RIGHT, so
+   the layout already reads sideways — the player naturally turns the phone. */
+.pad__controls--drive { flex: 1; margin-top: 0.4rem; width: 100%; }
+.pad__analog { flex: 1; width: 100%; display: flex; min-height: 0; }
 .pad__analog[hidden] { display: none; }
 
-.steer { position: relative; display: flex; flex-direction: column; gap: 0.5rem; }
-.steer__tilt {
-  align-self: flex-end;
-  background: transparent; color: var(--muted);
-  border: 1px solid #232744; border-radius: 999px; padding: 0.35em 0.9em;
-  font-size: 0.85rem; font-weight: 600;
+.drive {
+  flex: 1; display: flex; flex-direction: row;
+  align-items: flex-end; justify-content: space-between;
+  gap: 0.8rem; min-height: 0; padding-bottom: 0.3rem;
 }
-.steer__tilt[aria-pressed="true"] { color: var(--text); border-color: var(--accent); background: rgba(109,123,255,0.14); }
-/* The drag surface. touch-action:none so steering never scrolls the page. */
+.drivecol { display: flex; flex-direction: column; }
+.drivecol--left { align-items: flex-start; gap: 0.5rem; }
+.drivecol--right { align-items: flex-end; }
+
+/* Pedals (bottom-left): compact GAS/BRAKE, DRIFT beneath. */
+.pedals { display: grid; grid-template-columns: repeat(2, 74px); gap: 0.45rem; }
+.pedal {
+  height: 54px; border: none; border-radius: 15px; touch-action: none;
+  font-size: 0.9rem; font-weight: 800; color: white;
+}
+.pedal--gas   { grid-column: 1; grid-row: 1; background: linear-gradient(135deg, #16a34a, #38e8a0); }
+.pedal--brake { grid-column: 2; grid-row: 1; background: linear-gradient(135deg, #d31027, #ea384d); }
+.pedal--drift { grid-column: 1 / 3; grid-row: 2; height: 38px; font-size: 0.8rem; background: linear-gradient(135deg, #f5af19, #f12711); }
+.pedal.is-active { filter: brightness(1.25); transform: translateY(1px); }
+
+/* Aux buttons: small pills under the pedals. */
+.pad__actions--aux { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0; }
+.pad__actions--aux .action { min-width: 44px; height: 38px; padding: 0 0.55rem; font-size: 0.82rem; }
+
+/* Steering joystick (bottom-right), compact + self-centering. */
+.steer { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; }
 .steer__track {
-  position: relative; width: 100%; height: 86px;
-  border-radius: 20px; background: var(--panel);
-  border: 1px solid #1c2040; touch-action: none; overflow: hidden;
-}
-/* Centre detent so "straight" is visible at a glance. */
-.steer__track::before {
-  content: ""; position: absolute; top: 12%; bottom: 12%; left: 50%;
-  width: 2px; transform: translateX(-50%); background: #232744;
+  position: relative; width: min(150px, 42vw); height: min(150px, 42vw);
+  border-radius: 50%; touch-action: none;
+  background: radial-gradient(circle at 50% 42%, #171b34, var(--panel));
+  border: 1px solid #262c52; box-shadow: inset 0 2px 12px rgba(0,0,0,0.5);
 }
 .steer__knob {
   position: absolute; top: 50%; left: 50%;
-  width: 62px; height: 62px; transform: translate(-50%, -50%);
+  width: 36%; height: 36%; transform: translate(-50%, -50%);
   border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  box-shadow: 0 6px 16px rgba(0,0,0,0.4); pointer-events: none;
+  box-shadow: 0 5px 14px rgba(0,0,0,0.45); pointer-events: none;
 }
-.steer__hint { text-align: center; color: var(--muted); font-size: 0.8rem; }
-.steer.is-tilt .steer__hint::after,
-.pad__analog.is-tilt .steer__hint { color: var(--accent); }
-.pad__analog.is-tilt .steer__track { opacity: 0.6; }
-
-.pedals { display: grid; grid-template-columns: 1.2fr 1.2fr 1fr; gap: 0.7rem; }
-.pedal {
-  height: 104px; border: none; border-radius: 20px;
-  font-size: 1.15rem; font-weight: 800; letter-spacing: 0.02em; color: white;
-  touch-action: none;
+.steer__tilt {
+  background: transparent; color: var(--muted);
+  border: 1px solid #232744; border-radius: 999px; padding: 0.25em 0.75em;
+  font-size: 0.75rem; font-weight: 600;
 }
-.pedal--gas   { background: linear-gradient(135deg, #16a34a, #38e8a0); }
-.pedal--brake { background: linear-gradient(135deg, #d31027, #ea384d); }
-.pedal--drift { background: linear-gradient(135deg, #f5af19, #f12711); font-size: 1rem; }
-.pedal.is-active { filter: brightness(1.25); transform: translateY(1px); }
+.steer__tilt[aria-pressed="true"] { color: var(--text); border-color: var(--accent); background: rgba(109,123,255,0.14); }
+.pad__analog.is-tilt .steer__track { opacity: 0.55; }
