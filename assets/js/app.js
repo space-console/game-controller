@@ -4,7 +4,7 @@
 // turns taps into normalized intents and sends them through ControllerSession.
 // Placeholder UX over a stubbed transport — wire a real transport in session.js.
 
-import { ControllerSession } from "./session.js?v=eacb9f28-02df-40f6-8d19-2d434c513802";
+import { ControllerSession } from "./session.js?v=e1d7efdf-6434-40da-a602-6fcae8f68386";
 
 const session = new ControllerSession();
 
@@ -126,9 +126,11 @@ for (const btn of padDpad.querySelectorAll("[data-intent]")) {
 // appended. `hold` buttons emit `<id>` on press and `<id>:release` on release
 // (e.g. pinball flippers).
 function renderControls(ctl) {
-  const profile = ctl && ctl.profile === "buttons" ? "buttons" : "dpad";
+  const profile =
+    ctl && (ctl.profile === "buttons" || ctl.profile === "analog") ? ctl.profile : "dpad";
   const buttons = (ctl && ctl.buttons) || [];
   padDpad.hidden = profile !== "dpad";
+  setAnalog(profile === "analog"); // steering track + gas/brake pedals for driving games
   padActions.innerHTML = "";
   for (const b of buttons) padActions.appendChild(makeAction(b));
   padActions.appendChild(makeAction({ id: "back", label: "Back", sys: true }));
@@ -155,6 +157,173 @@ function makeAction(b) {
   el.addEventListener("pointerleave", release);
   el.addEventListener("pointercancel", release);
   return el;
+}
+
+// ---- Analog driving pad ----------------------------------------------------
+// For driving games (profile:"analog"). A steering track the left thumb drags
+// (-1..1, self-centering) plus gas/brake/drift pedals for the right thumb, sent
+// as a continuous frame via session.sendAnalog(). An optional tilt mode steers
+// from the phone's gyroscope instead of the track. The declared aux buttons
+// (power-up, reset, …) still render in padActions alongside.
+const padControls = document.querySelector(".pad__controls");
+let analog = null;            // lazily-built DOM + wiring
+const drive = { steer: 0, gas: false, brake: false, drift: false };
+let driveDirty = false;       // a frame is pending; coalesced to one send per rAF
+let driveActive = false;      // analog profile is showing → run the send loop
+let steerPointer = null;      // active steering pointer id (null = not steering)
+let tiltOn = false;
+let tiltCenter = null;        // gyro reading captured as "straight" when tilt enables
+
+function setAnalog(on) {
+  if (on) ensureAnalog();
+  if (analog) analog.root.hidden = !on;
+  if (on && !driveActive) {
+    driveActive = true;
+    requestAnimationFrame(driveLoop);
+  } else if (!on && driveActive) {
+    driveActive = false;
+    resetDrive();
+    disableTilt();
+    session.sendAnalog(0, 0, 0, false); // release the car when leaving the pad
+  }
+}
+
+function resetDrive() {
+  drive.steer = 0; drive.gas = false; drive.brake = false; drive.drift = false;
+  steerPointer = null;
+  if (analog) {
+    setKnob(0);
+    for (const p of analog.pedals) p.el.classList.remove("is-active");
+  }
+}
+
+// One coalesced frame per animation tick while the car has focus — enough for
+// smooth steering without flooding the data channel.
+function driveLoop() {
+  if (!driveActive) return;
+  if (driveDirty) {
+    const throttle = drive.gas ? 1 : drive.brake ? -1 : 0;
+    session.sendAnalog(drive.steer, throttle, drive.brake ? 1 : 0, drive.drift);
+    driveDirty = false;
+  }
+  requestAnimationFrame(driveLoop);
+}
+function markDrive() { driveDirty = true; }
+
+function setKnob(steer) {
+  drive.steer = Math.max(-1, Math.min(1, steer));
+  if (analog) analog.knob.style.left = `${(drive.steer * 0.5 + 0.5) * 100}%`;
+}
+
+function steerFromEvent(e) {
+  const rect = analog.track.getBoundingClientRect();
+  const rel = rect.width ? (e.clientX - rect.left) / rect.width : 0.5;
+  setKnob(rel * 2 - 1);
+  markDrive();
+}
+
+function ensureAnalog() {
+  if (analog) return;
+  const root = document.createElement("div");
+  root.className = "pad__analog";
+  root.innerHTML = `
+    <div class="steer" aria-label="Steering">
+      <button class="steer__tilt" type="button" aria-pressed="false">Tilt: off</button>
+      <div class="steer__track"><span class="steer__knob"></span></div>
+      <div class="steer__hint">Drag to steer</div>
+    </div>
+    <div class="pedals" role="group" aria-label="Pedals">
+      <button class="pedal pedal--gas" data-pedal="gas" type="button">GAS</button>
+      <button class="pedal pedal--brake" data-pedal="brake" type="button">BRAKE</button>
+      <button class="pedal pedal--drift" data-pedal="drift" type="button">DRIFT</button>
+    </div>`;
+  // Insert the driving surface above the aux action buttons.
+  padControls.insertBefore(root, padActions);
+
+  const track = root.querySelector(".steer__track");
+  const knob = root.querySelector(".steer__knob");
+  const tilt = root.querySelector(".steer__tilt");
+
+  // Steering: drag anywhere on the track. One pointer owns steering at a time so
+  // a second thumb on the pedals doesn't hijack it.
+  track.addEventListener("pointerdown", (e) => {
+    if (tiltOn) return; // gyro owns steering
+    e.preventDefault();
+    steerPointer = e.pointerId;
+    try { track.setPointerCapture(e.pointerId); } catch { /* older browser */ }
+    steerFromEvent(e);
+  });
+  track.addEventListener("pointermove", (e) => {
+    if (steerPointer === e.pointerId) steerFromEvent(e);
+  });
+  const endSteer = (e) => {
+    if (steerPointer !== e.pointerId) return;
+    steerPointer = null;
+    if (!tiltOn) { setKnob(0); markDrive(); } // self-center on release
+  };
+  track.addEventListener("pointerup", endSteer);
+  track.addEventListener("pointercancel", endSteer);
+
+  // Pedals: hold to engage. Capture the pointer so sliding off the button still
+  // releases cleanly on lift.
+  const pedals = [];
+  for (const el of root.querySelectorAll(".pedal")) {
+    const key = el.dataset.pedal;
+    pedals.push({ el, key });
+    el.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      try { el.setPointerCapture(e.pointerId); } catch { /* older browser */ }
+      drive[key] = true; el.classList.add("is-active"); markDrive();
+    });
+    const off = () => { if (drive[key]) { drive[key] = false; el.classList.remove("is-active"); markDrive(); } };
+    el.addEventListener("pointerup", off);
+    el.addEventListener("pointercancel", off);
+  }
+
+  tilt.addEventListener("click", () => toggleTilt(tilt));
+
+  analog = { root, track, knob, tilt, pedals };
+}
+
+// ---- Tilt (gyro) steering --------------------------------------------------
+function onTilt(e) {
+  if (e.gamma === null || e.gamma === undefined) return;
+  if (tiltCenter === null) tiltCenter = e.gamma; // first reading = "straight"
+  const SENS = 35; // degrees of tilt for full lock
+  setKnob((e.gamma - tiltCenter) / SENS);
+  markDrive();
+}
+
+async function toggleTilt(btn) {
+  if (tiltOn) { disableTilt(); return; }
+  // iOS 13+ gates motion sensors behind an explicit permission prompt.
+  try {
+    const DOE = window.DeviceOrientationEvent;
+    if (DOE && typeof DOE.requestPermission === "function") {
+      const res = await DOE.requestPermission();
+      if (res !== "granted") { padLog.textContent = "Tilt needs motion access"; return; }
+    }
+  } catch { padLog.textContent = "Tilt unavailable"; return; }
+  tiltCenter = null;
+  tiltOn = true;
+  steerPointer = null;
+  window.addEventListener("deviceorientation", onTilt);
+  btn.textContent = "Tilt: on";
+  btn.setAttribute("aria-pressed", "true");
+  if (analog) analog.root.classList.add("is-tilt");
+}
+
+function disableTilt() {
+  if (!tiltOn) return;
+  tiltOn = false;
+  tiltCenter = null;
+  window.removeEventListener("deviceorientation", onTilt);
+  setKnob(0); markDrive();
+  if (analog) {
+    analog.root.classList.remove("is-tilt");
+    analog.tilt.textContent = "Tilt: off";
+    analog.tilt.setAttribute("aria-pressed", "false");
+  }
 }
 
 leaveBtn.addEventListener("click", () => {

@@ -114,6 +114,21 @@ export class ControllerSession extends EventTarget {
     this.dispatchEvent(new CustomEvent("sent", { detail: { intent } }));
   }
 
+  /**
+   * Send a continuous analog driving frame to the screen (steering games). Shares
+   * the intents channel using a compact JSON envelope `{t:"a",s,g,b,h}` the TV
+   * distinguishes from plain intent strings. Values are rounded to 2 decimals to
+   * keep frames small since these fire many times a second while steering.
+   *   steer/throttle: -1..1   brake: 0..1   handbrake: bool
+   */
+  sendAnalog(steer, throttle, brake, handbrake) {
+    if (!(this.connected && this._dc && this._dc.readyState === "open")) return;
+    const r = (v) => Math.round((Number(v) || 0) * 100) / 100;
+    this._dc.send(JSON.stringify({
+      t: "a", s: r(steer), g: r(throttle), b: r(brake), h: handbrake ? 1 : 0,
+    }));
+  }
+
   disconnect() {
     this._intentional = true; // an explicit Leave — forget the room, don't rejoin
     this._teardown();
