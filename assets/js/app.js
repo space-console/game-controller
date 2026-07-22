@@ -130,10 +130,13 @@ function renderControls(ctl) {
     ctl && (ctl.profile === "buttons" || ctl.profile === "analog") ? ctl.profile : "dpad";
   const buttons = (ctl && ctl.buttons) || [];
   padDpad.hidden = profile !== "dpad";
-  setAnalog(profile === "analog"); // steering track + gas/brake pedals for driving games
+  setAnalog(profile === "analog"); // landscape steering + pedals for driving games
+  // Aux buttons sit in the LEFT column of the analog pad, else in the normal row.
+  const target = profile === "analog" ? analog.aux : padActions;
   padActions.innerHTML = "";
-  for (const b of buttons) padActions.appendChild(makeAction(b));
-  padActions.appendChild(makeAction({ id: "back", label: "Back", sys: true }));
+  if (analog) analog.aux.innerHTML = "";
+  for (const b of buttons) target.appendChild(makeAction(b));
+  target.appendChild(makeAction({ id: "back", label: "Back", sys: true }));
 }
 
 function makeAction(b) {
@@ -177,6 +180,7 @@ let tiltCenter = null;        // gyro reading captured as "straight" when tilt e
 function setAnalog(on) {
   if (on) ensureAnalog();
   if (analog) analog.root.hidden = !on;
+  padControls.classList.toggle("pad__controls--drive", on); // landscape driving layout
   if (on && !driveActive) {
     driveActive = true;
     requestAnimationFrame(driveLoop);
@@ -202,47 +206,83 @@ function resetDrive() {
 function driveLoop() {
   if (!driveActive) return;
   if (driveDirty) {
+    // BRAKE = reverse/brake: negative throttle brakes while moving forward, then
+    // reverses once stopped (the runtime handles the transition). Sending a
+    // service brake too would pin the car and block reverse — so we don't.
     const throttle = drive.gas ? 1 : drive.brake ? -1 : 0;
-    session.sendAnalog(drive.steer, throttle, drive.brake ? 1 : 0, drive.drift);
+    session.sendAnalog(drive.steer, throttle, 0, drive.drift);
     driveDirty = false;
   }
   requestAnimationFrame(driveLoop);
 }
 function markDrive() { driveDirty = true; }
 
-function setKnob(steer) {
-  drive.steer = Math.max(-1, Math.min(1, steer));
-  if (analog) analog.knob.style.left = `${(drive.steer * 0.5 + 0.5) * 100}%`;
+// Radius the knob can travel from the stick centre.
+function knobRadius() {
+  if (!analog) return 0;
+  const d = Math.min(analog.track.clientWidth, analog.track.clientHeight);
+  return d * 0.5 - 26;
 }
 
-function steerFromEvent(e) {
+// Position the knob for a given steer value (used by tilt + self-centering).
+function setKnob(steer) {
+  drive.steer = Math.max(-1, Math.min(1, steer));
+  if (analog) {
+    const x = drive.steer * knobRadius();
+    analog.knob.style.transform = `translate(calc(-50% + ${x}px), -50%)`;
+  }
+}
+
+// Virtual thumbstick: the knob follows the finger within a circle; steering is
+// the horizontal component. Self-centers on release.
+function stickFromEvent(e) {
   const rect = analog.track.getBoundingClientRect();
-  const rel = rect.width ? (e.clientX - rect.left) / rect.width : 0.5;
-  setKnob(rel * 2 - 1);
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const r = Math.min(rect.width, rect.height) * 0.5 - 26 || 1;
+  let dx = e.clientX - cx;
+  let dy = e.clientY - cy;
+  const mag = Math.hypot(dx, dy);
+  if (mag > r) { dx = (dx / mag) * r; dy = (dy / mag) * r; }
+  drive.steer = expoSteer(Math.max(-1, Math.min(1, dx / r)));
+  analog.knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
   markDrive();
+}
+
+// Mild steering expo: softens the mid-range so the car turns a bit less sharply,
+// while full stick deflection still reaches full lock. The knob position stays
+// linear to the thumb; only the transmitted steer is eased.
+function expoSteer(v) {
+  const k = 1.35;
+  return Math.sign(v) * Math.pow(Math.abs(v), k);
 }
 
 function ensureAnalog() {
   if (analog) return;
   const root = document.createElement("div");
   root.className = "pad__analog";
+  // Landscape driving surface: buttons on the LEFT, steering on the RIGHT.
   root.innerHTML = `
-    <div class="steer" aria-label="Steering">
-      <button class="steer__tilt" type="button" aria-pressed="false">Tilt: off</button>
-      <div class="steer__track"><span class="steer__knob"></span></div>
-      <div class="steer__hint">Drag to steer</div>
-    </div>
-    <div class="pedals" role="group" aria-label="Pedals">
-      <button class="pedal pedal--gas" data-pedal="gas" type="button">GAS</button>
-      <button class="pedal pedal--brake" data-pedal="brake" type="button">BRAKE</button>
-      <button class="pedal pedal--drift" data-pedal="drift" type="button">DRIFT</button>
+    <div class="drive">
+      <div class="drivecol drivecol--left">
+        <div class="pedals" role="group" aria-label="Pedals">
+          <button class="pedal pedal--gas" data-pedal="gas" type="button">GAS</button>
+          <button class="pedal pedal--brake" data-pedal="brake" type="button">BRAKE</button>
+          <button class="pedal pedal--drift" data-pedal="drift" type="button">DRIFT</button>
+        </div>
+        <div class="pad__actions pad__actions--aux" id="analogAux" role="group" aria-label="Actions"></div>
+      </div>
+      <div class="drivecol drivecol--right steer" aria-label="Steering">
+        <button class="steer__tilt" type="button" aria-pressed="false">Tilt: off</button>
+        <div class="steer__track"><span class="steer__knob"></span></div>
+      </div>
     </div>`;
-  // Insert the driving surface above the aux action buttons.
   padControls.insertBefore(root, padActions);
 
   const track = root.querySelector(".steer__track");
   const knob = root.querySelector(".steer__knob");
   const tilt = root.querySelector(".steer__tilt");
+  const aux = root.querySelector("#analogAux");
 
   // Steering: drag anywhere on the track. One pointer owns steering at a time so
   // a second thumb on the pedals doesn't hijack it.
@@ -251,10 +291,10 @@ function ensureAnalog() {
     e.preventDefault();
     steerPointer = e.pointerId;
     try { track.setPointerCapture(e.pointerId); } catch { /* older browser */ }
-    steerFromEvent(e);
+    stickFromEvent(e);
   });
   track.addEventListener("pointermove", (e) => {
-    if (steerPointer === e.pointerId) steerFromEvent(e);
+    if (steerPointer === e.pointerId) stickFromEvent(e);
   });
   const endSteer = (e) => {
     if (steerPointer !== e.pointerId) return;
@@ -282,7 +322,7 @@ function ensureAnalog() {
 
   tilt.addEventListener("click", () => toggleTilt(tilt));
 
-  analog = { root, track, knob, tilt, pedals };
+  analog = { root, track, knob, tilt, pedals, aux };
 }
 
 // ---- Tilt (gyro) steering --------------------------------------------------
