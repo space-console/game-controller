@@ -6,14 +6,33 @@
 // The signaling socket goes idle once the channel is open. The UI is untouched:
 // the same `ready` / `sent` / `closed` events (plus `error`) drive it.
 
-// RTCPeerConnection config. Defaults to free public STUN; an optional TURN relay
-// can be added per device WITHOUT code changes via query params (mirrors ?signal=):
+// RTCPeerConnection config. Public STUN is enough while the phone and the TV sit
+// on one network; a TURN relay is what makes everything else work (phone on mobile
+// data, TV on Wi-Fi, iOS's mDNS-masked candidates). TURN credentials come from the
+// server at `/api/ice` — they can't be committed, since this repo is public.
+//
+// Fetched once at load into a module-level cache, so `connect()` only has to await
+// a promise that has almost certainly already settled by the time a player taps Join.
+//
+// Query params still win, for pointing a single device at a TURN the server doesn't
+// know about (mirrors ?signal=):
 //   ?turn=turn:<host>:3478&turnuser=<u>&turncred=<p>   add a TURN server
 //   ?relay=1                                           force relay-only (to verify TURN)
-// The same URL points at a local coturn now or a hosted/college TURN later.
+const DEFAULT_ICE = [{ urls: "stun:stun.l.google.com:19302" }];
+let vendedIce = null;
+
+// Best-effort: if there's no /api/ice (e.g. the app is on a static host), we simply
+// fall back to STUN, which still covers same-network play.
+const iceReady = fetch("/api/ice")
+  .then((r) => (r.ok ? r.json() : null))
+  .then((d) => {
+    if (d && Array.isArray(d.iceServers) && d.iceServers.length) vendedIce = d.iceServers;
+  })
+  .catch(() => { /* no server-vended ICE — STUN only */ });
+
 function rtcConfig() {
   const q = new URLSearchParams(location.search);
-  const iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
+  const iceServers = (vendedIce || DEFAULT_ICE).slice();
   const turn = q.get("turn");
   if (turn) {
     // Comma-separated list → one server with multiple URLs (ICE tries each).
@@ -35,6 +54,7 @@ export class ControllerSession extends EventTarget {
     this._dc = null;
     this._pendingIce = [];
     this._intentional = false; // true only for a user-initiated Leave
+    this._attempt = 0;         // connect() generation, so a stale attempt can't open
   }
 
   /** Join a room by code: signal in, then open a peer DataChannel to the TV. */
@@ -43,6 +63,19 @@ export class ControllerSession extends EventTarget {
     this.roomCode = (roomCode || "").toUpperCase();
     this.name = (name || "").trim() || null; // shown on the TV roster / leaderboards
 
+    // An RTCPeerConnection's ICE servers are fixed at construction, so we have to
+    // know the TURN config before building it. The fetch starts at page load, so by
+    // the time someone taps Join this is already settled. Stays synchronous for
+    // callers (app.js just calls connect() and listens for events).
+    const attempt = this._attempt; // bumped by _closeConnections on leave/rejoin
+    iceReady.then(() => {
+      if (this._attempt !== attempt) return; // superseded by a Leave or a re-Join
+      this._open();
+    });
+    return this;
+  }
+
+  _open() {
     const pc = new RTCPeerConnection(rtcConfig());
     this._pc = pc;
     const dc = pc.createDataChannel("intents", { ordered: true });
@@ -137,6 +170,9 @@ export class ControllerSession extends EventTarget {
   // Close the live sockets/peer without announcing it — used both by teardown and
   // when reconnecting (so a stale connection can't leak or double-fire events).
   _closeConnections() {
+    // Invalidate any connect() still waiting on the ICE fetch, so a Leave (or a
+    // second Join) can't be followed by a stale peer opening behind it.
+    this._attempt = (this._attempt || 0) + 1;
     this.connected = false;
     if (this._dc) {
       try { this._dc.close(); } catch { /* already closing */ }
