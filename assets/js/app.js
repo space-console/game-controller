@@ -4,7 +4,7 @@
 // turns taps into normalized intents and sends them through ControllerSession.
 // Placeholder UX over a stubbed transport — wire a real transport in session.js.
 
-import { ControllerSession } from "./session.js?v=d04bfd23-052f-46e8-b63b-50418e9611eb";
+import { ControllerSession } from "./session.js?v=b5025be9-0df1-4cd3-93db-d429e6db3614";
 
 const session = new ControllerSession();
 
